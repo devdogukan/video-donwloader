@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, jsonify, Response, send_file
 
 import database as db
 from downloader import DownloadManager
+from players import open_in_default_player
 
 app = Flask(__name__)
 manager = DownloadManager()
@@ -98,6 +99,35 @@ def download_file(download_id):
             return send_file(candidate, as_attachment=False)
 
     return jsonify({"error": "File not found on disk"}), 404
+
+
+def _resolve_file_path(dl):
+    file_path = dl["file_path"]
+    if "%(ext)s" not in file_path and os.path.exists(file_path):
+        return file_path
+    base_path = file_path.replace(".%(ext)s", "")
+    for ext in [".mp4", ".webm", ".mkv"]:
+        candidate = base_path + ext
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+@app.post("/api/download/<int:download_id>/open")
+def open_download(download_id):
+    dl = db.get_download(download_id)
+    if not dl or dl["status"] != "completed":
+        return jsonify({"error": "File not available"}), 404
+
+    resolved = _resolve_file_path(dl)
+    if not resolved:
+        return jsonify({"error": "File not found on disk"}), 404
+
+    try:
+        open_in_default_player(resolved)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────

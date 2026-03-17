@@ -147,7 +147,7 @@ async function startDownload() {
     }
 }
 
-// ── Pause / Resume / Delete ─────────────────────────────────────────────────
+// ── Pause / Resume / Delete / Play ──────────────────────────────────────────
 
 async function pauseDownload(id) {
     await fetch(`/api/download/${id}/pause`, { method: "POST" });
@@ -160,6 +160,20 @@ async function resumeDownload(id) {
 async function deleteDownload(id) {
     if (!confirm("Are you sure you want to delete this download?")) return;
     await fetch(`/api/download/${id}`, { method: "DELETE" });
+}
+
+async function openInPlayer(id) {
+    try {
+        const res = await fetch(`/api/download/${id}/open`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+    } catch (err) {
+        alert("Could not open player: " + err.message);
+    }
+}
+
+function openInBrowser(id) {
+    window.open(`/api/download/${id}/file`, "_blank");
 }
 
 // ── Render Downloads List ───────────────────────────────────────────────────
@@ -182,7 +196,11 @@ function renderDownloads() {
 
 function buildDownloadItem(dl) {
     const progress = dl.progress || 0;
-    const progressClass = dl.status;
+    const progressClass =
+        dl.status === "completed" ? "completed" :
+        dl.status === "paused" ? "paused" :
+        dl.status === "merging" ? "merging" :
+        dl.status === "error" ? "error" : "";
 
     let actionButtons = "";
     if (dl.status === "downloading") {
@@ -190,7 +208,8 @@ function buildDownloadItem(dl) {
     } else if (dl.status === "paused") {
         actionButtons = `<button onclick="resumeDownload(${dl.id})" title="Resume">▶ Resume</button>`;
     } else if (dl.status === "completed") {
-        actionButtons = `<button onclick="window.open('/api/download/${dl.id}/file','_blank')" title="Play">▶ Play</button>`;
+        actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player">▶ Play</button>`;
+        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser">🌐 Browser</button>`;
     }
     actionButtons += `<button class="danger" onclick="deleteDownload(${dl.id})" title="Delete">✕ Delete</button>`;
 

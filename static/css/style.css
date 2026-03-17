@@ -434,6 +434,7 @@ header h1 svg {
     border-color: var(--accent);
 }
 
+
 /* ── Responsive ──────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
