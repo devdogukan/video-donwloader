@@ -91,14 +91,11 @@ def download_file(download_id):
     if not dl or dl["status"] != "completed":
         return jsonify({"error": "File not available"}), 404
 
-    file_path = dl["file_path"]
-    base_path = file_path.replace(".%(ext)s", "")
-    for ext in [".mp4", ".webm", ".mkv"]:
-        candidate = base_path + ext
-        if os.path.exists(candidate):
-            return send_file(candidate, as_attachment=False)
+    resolved = _resolve_file_path(dl)
+    if not resolved:
+        return jsonify({"error": "File not found on disk"}), 404
 
-    return jsonify({"error": "File not found on disk"}), 404
+    return send_file(resolved, as_attachment=False)
 
 
 def _resolve_file_path(dl):
