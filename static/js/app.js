@@ -1,6 +1,7 @@
 let currentVideoInfo = null;
 let downloads = {};
 let evtSource = null;
+let deleteModalTargetId = null;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,36 @@ function statusLabel(status) {
 
 function $(sel) {
     return document.querySelector(sel);
+}
+
+// ── Delete Modal (created in JS so it always exists) ──────────────────────────
+
+function createDeleteModal() {
+    const modal = document.createElement("div");
+    modal.id = "deleteModal";
+    modal.className = "modal-overlay hidden";
+    modal.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <span class="material-symbols-rounded modal-icon danger">delete</span>
+                <h3 class="modal-title">Delete Download</h3>
+            </div>
+            <p class="modal-body">Are you sure you want to delete this download? This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn modal-btn-cancel">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-danger">
+                    <span class="material-symbols-rounded">delete</span>
+                    Delete
+                </button>
+            </div>
+        </div>
+    `;
+    modal.querySelector(".modal-btn-cancel").addEventListener("click", closeDeleteModal);
+    modal.querySelector(".modal-btn-danger").addEventListener("click", confirmDelete);
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeDeleteModal();
+    });
+    document.body.appendChild(modal);
 }
 
 // ── URL Input ───────────────────────────────────────────────────────────────
@@ -157,8 +188,28 @@ async function resumeDownload(id) {
     await fetch(`/api/download/${id}/resume`, { method: "POST" });
 }
 
-async function deleteDownload(id) {
-    if (!confirm("Are you sure you want to delete this download?")) return;
+function deleteDownload(id) {
+    deleteModalTargetId = id;
+    const modal = $("#deleteModal");
+    modal.classList.remove("hidden");
+    document.addEventListener("keydown", handleModalEscape);
+}
+
+function closeDeleteModal() {
+    deleteModalTargetId = null;
+    const modal = $("#deleteModal");
+    modal.classList.add("hidden");
+    document.removeEventListener("keydown", handleModalEscape);
+}
+
+function handleModalEscape(e) {
+    if (e.key === "Escape") closeDeleteModal();
+}
+
+async function confirmDelete() {
+    if (!deleteModalTargetId) return;
+    const id = deleteModalTargetId;
+    closeDeleteModal();
     await fetch(`/api/download/${id}`, { method: "DELETE" });
 }
 
@@ -196,11 +247,7 @@ function renderDownloads() {
 
 function buildDownloadItem(dl) {
     const progress = dl.progress || 0;
-    const progressClass =
-        dl.status === "completed" ? "completed" :
-        dl.status === "paused" ? "paused" :
-        dl.status === "merging" ? "merging" :
-        dl.status === "error" ? "error" : "";
+    const progressClass = ["completed", "paused", "merging", "error"].includes(dl.status) ? dl.status : "";
 
     let actionButtons = "";
     if (dl.status === "downloading") {
@@ -234,6 +281,7 @@ function buildDownloadItem(dl) {
                     <span>${dl.quality_label || ""}</span>
                     <span>${dl.filesize ? formatBytes(dl.filesize) : ""}</span>
                 </div>
+                ${dl.status !== "completed" ? `
                 <div class="progress-wrapper">
                     <div class="progress-bar">
                         <div class="progress-fill ${progressClass}" style="width: ${progress}%"></div>
@@ -243,6 +291,7 @@ function buildDownloadItem(dl) {
                         <span>${statusLine}</span>
                     </div>
                 </div>
+                ` : ""}
             </div>
             <hr class="dl-actions-divider">
             <div class="dl-actions">
@@ -350,4 +399,5 @@ function updateDownloadItemInPlace(id) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
+createDeleteModal();
 connectSSE();
