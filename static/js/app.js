@@ -92,7 +92,7 @@ async function fetchVideoInfo() {
 function renderVideoInfo(info) {
     $("#videoThumb").src = info.thumbnail;
     $("#videoTitle").textContent = info.title;
-    $("#videoDuration").textContent = formatDuration(info.duration);
+    $("#videoDurationText").textContent = formatDuration(info.duration);
 
     const select = $("#qualitySelect");
     select.innerHTML = "";
@@ -204,14 +204,14 @@ function buildDownloadItem(dl) {
 
     let actionButtons = "";
     if (dl.status === "downloading") {
-        actionButtons = `<button onclick="pauseDownload(${dl.id})" title="Pause">⏸ Pause</button>`;
+        actionButtons = `<button onclick="pauseDownload(${dl.id})" title="Pause"><span class="material-symbols-rounded">pause</span> Pause</button>`;
     } else if (dl.status === "paused") {
-        actionButtons = `<button onclick="resumeDownload(${dl.id})" title="Resume">▶ Resume</button>`;
+        actionButtons = `<button onclick="resumeDownload(${dl.id})" title="Resume"><span class="material-symbols-rounded">play_arrow</span> Resume</button>`;
     } else if (dl.status === "completed") {
-        actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player">▶ Play</button>`;
-        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser">🌐 Browser</button>`;
+        actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player"><span class="material-symbols-rounded">play_arrow</span> Play</button>`;
+        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">language</span> Browser</button>`;
     }
-    actionButtons += `<button class="danger" onclick="deleteDownload(${dl.id})" title="Delete">✕ Delete</button>`;
+    actionButtons += `<button class="danger" onclick="deleteDownload(${dl.id})" title="Delete"><span class="material-symbols-rounded">delete</span> Delete</button>`;
 
     let statusLine = "";
     if (dl.status === "downloading") {
@@ -222,8 +222,10 @@ function buildDownloadItem(dl) {
 
     return `
         <div class="download-item" data-id="${dl.id}">
-            <img class="dl-thumb" src="${dl.thumbnail || ""}" alt="" onerror="this.style.display='none'">
-            <div class="dl-content">
+            <div class="dl-thumb-wrap">
+                <img src="${dl.thumbnail || ""}" alt="" onerror="this.style.display='none'">
+            </div>
+            <div class="dl-body">
                 <div class="dl-header">
                     <span class="dl-title">${escapeHtml(dl.title || "Unknown Video")}</span>
                     <span class="status-badge status-${dl.status}">${statusLabel(dl.status)}</span>
@@ -241,9 +243,10 @@ function buildDownloadItem(dl) {
                         <span>${statusLine}</span>
                     </div>
                 </div>
-                <div class="dl-actions">
-                    ${actionButtons}
-                </div>
+            </div>
+            <hr class="dl-actions-divider">
+            <div class="dl-actions">
+                ${actionButtons}
             </div>
         </div>
     `;
@@ -340,8 +343,8 @@ function updateDownloadItemInPlace(id) {
 
     const stats = el.querySelector(".progress-stats");
     if (stats) {
-        const speedEta = `${dl.speed || ""} ${dl.eta ? "• " + dl.eta : ""}`;
-        stats.innerHTML = `<span>${(dl.progress || 0).toFixed(1)}%</span><span>${speedEta}</span>`;
+        const statusLine = `${dl.speed || ""} ${dl.eta ? "• " + dl.eta : ""}`;
+        stats.innerHTML = `<span>${(dl.progress || 0).toFixed(1)}%</span><span>${statusLine}</span>`;
     }
 }
 
