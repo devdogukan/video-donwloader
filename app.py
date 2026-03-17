@@ -1,6 +1,8 @@
 import json
 import os
 
+import mimetypes
+
 from flask import Flask, render_template, request, jsonify, Response, send_file
 
 import database as db
@@ -95,7 +97,8 @@ def download_file(download_id):
     if not resolved:
         return jsonify({"error": "File not found on disk"}), 404
 
-    return send_file(resolved, as_attachment=False)
+    mimetype = mimetypes.guess_type(resolved)[0] or "video/mp4"
+    return send_file(resolved, as_attachment=False, mimetype=mimetype)
 
 
 def _resolve_file_path(dl):
@@ -153,4 +156,4 @@ def downloads_stream():
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(debug=False, threaded=True, port=5000)
+    app.run(debug=False, threaded=True, host="0.0.0.0", port=5000)

@@ -230,7 +230,7 @@ class DownloadManager:
                         filesize = max(filesize, f.get("filesize") or f.get("filesize_approx") or 0)
 
                 options.append({
-                    "format_id": f"bestvideo[height<={height}]+bestaudio/best[height<={height}]",
+                    "format_id": f"bestvideo[height<={height}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<={height}]+bestaudio/best[height<={height}]",
                     "label": label,
                     "height": height,
                     "filesize": filesize,
