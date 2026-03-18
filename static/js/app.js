@@ -256,7 +256,7 @@ function buildDownloadItem(dl) {
         actionButtons = `<button onclick="resumeDownload(${dl.id})" title="Resume"><span class="material-symbols-rounded">play_arrow</span> Resume</button>`;
     } else if (dl.status === "completed") {
         actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player"><span class="material-symbols-rounded">play_arrow</span> Play</button>`;
-        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">language</span> Browser</button>`;
+        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">open_in_new</span> Browser</button>`;
     }
     actionButtons += `<button class="danger" onclick="deleteDownload(${dl.id})" title="Delete"><span class="material-symbols-rounded">delete</span> Delete</button>`;
 
