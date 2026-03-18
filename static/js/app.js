@@ -3,6 +3,10 @@ let downloads = {};
 let evtSource = null;
 let deleteModalTargetId = null;
 
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+);
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes) {
@@ -255,8 +259,12 @@ function buildDownloadItem(dl) {
     } else if (dl.status === "paused") {
         actionButtons = `<button onclick="resumeDownload(${dl.id})" title="Resume"><span class="material-symbols-rounded">play_arrow</span> Resume</button>`;
     } else if (dl.status === "completed") {
-        actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player"><span class="material-symbols-rounded">play_arrow</span> Play</button>`;
-        actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">open_in_new</span> Browser</button>`;
+        if (isMobile) {
+            actionButtons = `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">play_arrow</span> Play</button>`;
+        } else {
+            actionButtons = `<button onclick="openInPlayer(${dl.id})" title="Open in default player"><span class="material-symbols-rounded">play_arrow</span> Play</button>`;
+            actionButtons += `<button onclick="openInBrowser(${dl.id})" title="Play in browser"><span class="material-symbols-rounded">open_in_new</span> Browser</button>`;
+        }
     }
     actionButtons += `<button class="danger" onclick="deleteDownload(${dl.id})" title="Delete"><span class="material-symbols-rounded">delete</span> Delete</button>`;
 

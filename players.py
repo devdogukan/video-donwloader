@@ -27,5 +27,10 @@ def open_in_default_player(file_path):
         os.startfile(file_path)
     elif SYSTEM == "Darwin":
         subprocess.Popen(["open", file_path], **devnull)
-    else:
+    elif SYSTEM == "Linux":
         subprocess.Popen(["xdg-open", file_path], **devnull)
+    else:
+        raise OSError(
+            f"Unsupported operating system: {SYSTEM}. "
+            "Please use the browser player instead."
+        )
