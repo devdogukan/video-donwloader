@@ -264,7 +264,7 @@ function buildDownloadItem(dl) {
 
     let actionButtons = "";
     if (dl.status === "queued") {
-        actionButtons = "";
+        actionButtons = `<button onclick="pauseDownload(${dl.id})" title="Pause"><span class="material-symbols-rounded">pause</span> Pause</button>`;
     } else if (dl.status === "downloading") {
         actionButtons = `<button onclick="pauseDownload(${dl.id})" title="Pause"><span class="material-symbols-rounded">pause</span> Pause</button>`;
     } else if (dl.status === "paused") {

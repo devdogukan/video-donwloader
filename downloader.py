@@ -340,6 +340,12 @@ class DownloadManager:
         if task:
             task.pause()
             return True
+
+        dl = db.get_download(download_id)
+        if dl and dl["status"] == Status.QUEUED:
+            db.update_status(download_id, Status.PAUSED)
+            self.broadcast({"type": "status", "id": download_id, "status": Status.PAUSED})
+            return True
         return False
 
     def resume_download(self, download_id, queued=False):
