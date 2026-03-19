@@ -1,6 +1,6 @@
-# YT Video Downloader
+# Video Downloader
 
-A web-based application for downloading YouTube videos. Features pause/resume support, quality selection, and real-time progress tracking.
+A web-based application for downloading videos. Features pause/resume support, quality selection, and real-time progress tracking.
 
 ## Features
 
@@ -25,8 +25,8 @@ A web-based application for downloading YouTube videos. Features pause/resume su
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # clone the repository
-git clone https://github.com/devdogukan/yt-video-donwloader
-cd yt-video-donwloader
+git clone https://github.com/devdogukan/video-donwloader
+cd video-donwloader
 
 # create virtual environment and install dependencies
 uv sync
@@ -43,7 +43,7 @@ The app runs at `http://localhost:5000` by default.
 ## Usage
 
 1. Open `http://localhost:5000` in your browser
-2. Paste a YouTube video URL (or it will be detected on paste)
+2. Paste a video URL (or it will be detected on paste)
 3. Click "Fetch Info" to load video details
 4. Select quality and click "Download" to start
 5. Play downloaded videos with Play or Browser buttons
@@ -51,7 +51,7 @@ The app runs at `http://localhost:5000` by default.
 ## Project Structure
 
 ```
-yt-video-donwloader/
+video-donwloader/
 ├── app.py           # Flask app and API
 ├── downloader.py    # Download management with yt-dlp
 ├── database.py      # SQLite database
@@ -70,7 +70,3 @@ yt-video-donwloader/
 - **Frontend:** Vanilla JS, CSS
 - **Database:** SQLite
 - **Real-time:** Server-Sent Events (SSE)
-
-## License
-
-MIT
