@@ -25,6 +25,7 @@ class DownloadTask:
         self.concurrent_fragments = concurrent_fragments
         self._stop_event = threading.Event()
         self._thread = None
+        self._last_db_write = 0.0
 
     def progress_hook(self, d):
         if self._stop_event.is_set():
@@ -37,7 +38,11 @@ class DownloadTask:
             speed = _ANSI_RE.sub("", d.get("_speed_str", "")).strip()
             eta = _ANSI_RE.sub("", d.get("_eta_str", "")).strip()
 
-            db.update_progress(self.download_id, downloaded, progress, speed, eta)
+            now = time.monotonic()
+            if now - self._last_db_write >= 2.0:
+                db.update_progress(self.download_id, downloaded, progress, speed, eta)
+                self._last_db_write = now
+
             self.manager.broadcast({
                 "type": "progress",
                 "id": self.download_id,
