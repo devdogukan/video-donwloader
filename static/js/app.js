@@ -351,7 +351,7 @@ function buildDownloadItem(dl) {
     return `
         <div class="download-item" data-id="${dl.id}">
             <div class="dl-thumb-wrap">
-                <img src="${dl.thumbnail || ""}" alt="" onerror="this.style.display='none'">
+                <img src="/api/thumbnail/${dl.thumbnail}" alt="" onerror="this.style.display='none'">
             </div>
             <div class="dl-body">
                 <div class="dl-header">

@@ -3,13 +3,14 @@ import os
 
 import mimetypes
 
-from flask import Flask, render_template, request, jsonify, Response, send_file
+from flask import Flask, render_template, request, jsonify, Response, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
 import database as db
 from database import Status
 from downloader import DownloadManager, DOWNLOADS_DIR
 from players import open_in_default_player
+from utils import get_or_create_thumbnail, THUMB_DIR
 
 app = Flask(__name__)
 manager = DownloadManager()
@@ -86,7 +87,7 @@ def add_local_download():
         video_id=None,
         url=None,
         title=title,
-        thumbnail=None,
+        thumbnail=get_or_create_thumbnail(video_path=resolved),
         duration=None,
         format_id=None,
         quality_label=None,
@@ -203,6 +204,10 @@ def open_download(download_id):
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.get("/api/thumbnail/<filename>")
+def get_thumbnail(filename: str):
+    return send_from_directory(THUMB_DIR, filename)
 
 
 # ── SSE Stream ───────────────────────────────────────────────────────────────

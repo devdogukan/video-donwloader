@@ -117,6 +117,14 @@ def update_file_path(download_id, file_path):
     )
     conn.commit()
 
+def update_file_path_and_thumbnail_path(download_id, file_path, thumbnail_path):
+    conn = get_connection()
+    conn.execute(
+        """UPDATE downloads SET file_path = ?, thumbnail = ?, updated_at = ? WHERE id = ?""",
+        (file_path, thumbnail_path, datetime.now(), download_id),
+    )
+    conn.commit()
+
 
 def get_all_downloads():
     conn = get_connection()

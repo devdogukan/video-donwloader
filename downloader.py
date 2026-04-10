@@ -9,6 +9,7 @@ import yt_dlp
 
 import database as db
 from database import Status
+from utils import get_or_create_thumbnail
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -118,8 +119,12 @@ class DownloadTask:
             if os.path.exists(mp4_path):
                 final_path = mp4_path
 
+            thumbnail_path = get_or_create_thumbnail(
+                video_url=self.url,
+                video_path=final_path
+            )
             db.update_status(self.download_id, Status.COMPLETED)
-            db.update_file_path(self.download_id, final_path)
+            db.update_file_path_and_thumbnail_path(self.download_id, final_path, thumbnail_path)
             db.update_progress(self.download_id, 0, 100, "", "")
             self.manager.broadcast({
                 "type": "status",
@@ -411,6 +416,11 @@ class DownloadManager:
                     part = file_path + ".part"
                     if os.path.exists(part):
                         os.remove(part)
+
+        if dl and dl["thumbnail"]:
+            thumbnail_path = dl["thumbnail"]
+            if os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
 
         db.delete_download(download_id)
         self.broadcast({"type": "deleted", "id": download_id})
