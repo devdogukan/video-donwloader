@@ -132,12 +132,8 @@ class DownloadTask:
             if os.path.exists(mp4_path):
                 final_path = mp4_path
 
-            thumbnail_path = get_or_create_thumbnail(
-                thumbnail_url=self.thumbnail_url,
-                video_path=final_path,
-            )
             db.update_status(self.download_id, Status.COMPLETED)
-            db.update_file_path_and_thumbnail(self.download_id, final_path, thumbnail_path)
+            db.update_file_path(self.download_id, final_path)
             self.manager.clear_runtime_state(self.download_id)
             self.manager.broadcast({
                 "type": "status",
@@ -145,7 +141,6 @@ class DownloadTask:
                 "status": Status.COMPLETED,
                 "progress": 100,
                 "file_path": final_path,
-                "thumbnail": thumbnail_path,
             })
         except yt_dlp.utils.DownloadCancelled:
             db.update_status(self.download_id, Status.PAUSED)
@@ -302,7 +297,7 @@ class DownloadManager:
             video_id=video_info["video_id"],
             url=url,
             title=title,
-            thumbnail=video_info["thumbnail"],
+            thumbnail=get_or_create_thumbnail(thumbnail_url=video_info["thumbnail"]),
             duration=video_info["duration"],
             format_id=format_id,
             quality_label=quality_label,
