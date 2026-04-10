@@ -17,6 +17,7 @@ manager = DownloadManager()
 
 db.init_db()
 db.mark_interrupted_as_paused()
+manager.load_queue_from_db()
 
 
 # ── Pages ────────────────────────────────────────────────────────────────────
@@ -41,7 +42,22 @@ def video_info():
         return jsonify({"error": str(e)}), 400
 
 
-def _unique_path_in_downloads_dir(basename):
+def _guess_extension(mimetype: str | None) -> str:
+    mime = (mimetype or "").split(";")[0].strip()
+    ext = mimetypes.guess_extension(mime or "") or ".mp4"
+    return ".jpeg" if ext == ".jpe" else ext
+
+
+def _safe_filename(original: str, mimetype: str | None = None) -> str:
+    """Sanitize an upload filename, ensuring it has a valid extension."""
+    base = secure_filename(original)
+    if base and not base.startswith(".") and "." in base:
+        return base
+    stem = base if base and not base.startswith(".") else "video"
+    return f"{stem}{_guess_extension(mimetype)}"
+
+
+def _unique_path_in_downloads_dir(basename: str) -> str:
     dest = os.path.join(DOWNLOADS_DIR, basename)
     stem, ext = os.path.splitext(basename)
     n = 0
@@ -57,47 +73,24 @@ def add_local_download():
     if not f or not f.filename:
         return jsonify({"error": "file is required"}), 400
 
-    mime = (f.mimetype or "").split(";")[0].strip()
-    base = secure_filename(f.filename)
-    if not base or base.startswith("."):
-        guess = mimetypes.guess_extension(mime or "") or ".mp4"
-        if guess == ".jpe":
-            guess = ".jpeg"
-        base = f"video{guess}"
-    elif "." not in base:
-        guess = mimetypes.guess_extension(mime or "") or ".mp4"
-        if guess == ".jpe":
-            guess = ".jpeg"
-        base = f"{base}{guess}"
-
-    dest = _unique_path_in_downloads_dir(base)
+    dest = _unique_path_in_downloads_dir(_safe_filename(f.filename, f.mimetype))
     try:
         f.save(dest)
     except OSError as e:
         return jsonify({"error": str(e)}), 500
 
-    resolved = os.path.abspath(dest)
-    title = os.path.basename(resolved)
+    path = os.path.abspath(dest)
     try:
-        size = os.path.getsize(resolved)
+        size = os.path.getsize(path)
     except OSError:
         size = None
 
     download_id = db.create_download(
-        video_id=None,
-        url=None,
-        title=title,
-        thumbnail=get_or_create_thumbnail(video_path=resolved),
-        duration=None,
-        format_id=None,
-        quality_label=None,
-        filesize=size,
-        file_path=resolved,
-        status=Status.COMPLETED,
-        concurrent_fragments=1,
-        is_queued=False,
+        video_id=None, url=None, title=os.path.basename(path),
+        thumbnail=get_or_create_thumbnail(video_path=path),
+        duration=None, format_id=None, quality_label=None,
+        filesize=size, file_path=path, status=Status.COMPLETED,
     )
-    db.update_progress(download_id, size or 0, 100.0, "", "")
     dl = db.get_download(download_id)
     manager.broadcast({"type": "new", "download": dl})
     return jsonify({"id": download_id, "status": Status.COMPLETED})
@@ -160,7 +153,7 @@ def download_delete(download_id):
 
 @app.get("/api/downloads")
 def downloads_list():
-    return jsonify(db.get_all_downloads())
+    return jsonify(manager.get_downloads_with_runtime())
 
 
 @app.get("/api/download/<int:download_id>/file")
@@ -217,7 +210,7 @@ def downloads_stream():
     def generate():
         q = manager.subscribe()
         try:
-            initial = json.dumps(db.get_all_downloads(), default=str)
+            initial = json.dumps(manager.get_downloads_with_runtime(), default=str)
             yield f"event: init\ndata: {initial}\n\n"
 
             while True:

@@ -1,7 +1,6 @@
 import sqlite3
 import os
 import threading
-from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -42,17 +41,12 @@ def init_db():
             format_id       TEXT,
             quality_label   TEXT,
             filesize        INTEGER,
-            downloaded_bytes INTEGER DEFAULT 0,
-            progress        REAL DEFAULT 0,
-            speed           TEXT,
-            eta             TEXT,
             status          TEXT DEFAULT 'pending',
             file_path       TEXT,
             error_message   TEXT,
             concurrent_fragments INTEGER DEFAULT 1,
             is_queued       INTEGER DEFAULT 0,
-            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     _migrate_add_column(conn, "concurrent_fragments", "INTEGER DEFAULT 1")
@@ -86,25 +80,11 @@ def create_download(video_id, url, title, thumbnail, duration, format_id,
     return cursor.lastrowid
 
 
-def update_progress(download_id, downloaded_bytes, progress, speed, eta):
-    conn = get_connection()
-    conn.execute(
-        """UPDATE downloads
-           SET downloaded_bytes = ?, progress = ?, speed = ?, eta = ?,
-               updated_at = ?
-           WHERE id = ?""",
-        (downloaded_bytes, progress, speed, eta, datetime.now(), download_id),
-    )
-    conn.commit()
-
-
 def update_status(download_id, status, error_message=None):
     conn = get_connection()
     conn.execute(
-        """UPDATE downloads
-           SET status = ?, error_message = ?, updated_at = ?
-           WHERE id = ?""",
-        (status, error_message, datetime.now(), download_id),
+        "UPDATE downloads SET status = ?, error_message = ? WHERE id = ?",
+        (status, error_message, download_id),
     )
     conn.commit()
 
@@ -112,16 +92,17 @@ def update_status(download_id, status, error_message=None):
 def update_file_path(download_id, file_path):
     conn = get_connection()
     conn.execute(
-        """UPDATE downloads SET file_path = ?, updated_at = ? WHERE id = ?""",
-        (file_path, datetime.now(), download_id),
+        "UPDATE downloads SET file_path = ? WHERE id = ?",
+        (file_path, download_id),
     )
     conn.commit()
 
-def update_file_path_and_thumbnail_path(download_id, file_path, thumbnail_path):
+
+def update_file_path_and_thumbnail(download_id, file_path, thumbnail):
     conn = get_connection()
     conn.execute(
-        """UPDATE downloads SET file_path = ?, thumbnail = ?, updated_at = ? WHERE id = ?""",
-        (file_path, thumbnail_path, datetime.now(), download_id),
+        "UPDATE downloads SET file_path = ?, thumbnail = ? WHERE id = ?",
+        (file_path, thumbnail, download_id),
     )
     conn.commit()
 
@@ -159,48 +140,20 @@ def delete_download(download_id):
 
 
 def mark_interrupted_as_paused():
-    """On startup, mark any 'downloading' entries as 'paused'."""
+    """On startup, mark any 'downloading' or 'merging' entries as 'paused'."""
     conn = get_connection()
     conn.execute(
-        """UPDATE downloads SET status = ?, updated_at = ?
-           WHERE status = ?""",
-        (Status.PAUSED, datetime.now(), Status.DOWNLOADING),
+        "UPDATE downloads SET status = ? WHERE status IN (?, ?)",
+        (Status.PAUSED, Status.DOWNLOADING, Status.MERGING),
     )
     conn.commit()
 
 
-def get_oldest_queued():
+def get_queued_ids():
+    """Return IDs of downloads with QUEUED status, ordered by creation time."""
     conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM downloads WHERE status = ? ORDER BY created_at ASC LIMIT 1",
+    rows = conn.execute(
+        "SELECT id FROM downloads WHERE status = ? ORDER BY created_at ASC",
         (Status.QUEUED,),
-    ).fetchone()
-    return dict[Any, Any](row) if row else None
-
-
-def count_by_status(status):
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM downloads WHERE status = ?",
-        (status,),
-    ).fetchone()
-    return row["cnt"] if row else 0
-
-
-def update_is_queued(download_id, is_queued):
-    conn = get_connection()
-    conn.execute(
-        """UPDATE downloads SET is_queued = ?, updated_at = ? WHERE id = ?""",
-        (int(is_queued), datetime.now(), download_id),
-    )
-    conn.commit()
-
-
-def count_active_queued():
-    conn = get_connection()
-    row = conn.execute(
-        """SELECT COUNT(*) as cnt FROM downloads
-           WHERE is_queued = 1 AND status IN (?, ?)""",
-        (Status.DOWNLOADING, Status.MERGING),
-    ).fetchone()
-    return row["cnt"] if row else 0
+    ).fetchall()
+    return [row["id"] for row in rows]

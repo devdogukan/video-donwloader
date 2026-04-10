@@ -5,6 +5,8 @@ import threading
 import time
 import queue
 import json
+from collections import deque
+
 import yt_dlp
 
 import database as db
@@ -31,16 +33,16 @@ def _is_path_under_dir(path, parent_dir):
 
 class DownloadTask:
     def __init__(self, download_id, url, format_id, output_path, manager,
-                 concurrent_fragments=1):
+                 concurrent_fragments=1, thumbnail_url=None):
         self.download_id = download_id
         self.url = url
         self.format_id = format_id
         self.output_path = output_path
         self.manager = manager
         self.concurrent_fragments = concurrent_fragments
+        self.thumbnail_url = thumbnail_url
         self._stop_event = threading.Event()
         self._thread = None
-        self._last_db_write = 0.0
 
     def progress_hook(self, d):
         if self._stop_event.is_set():
@@ -53,29 +55,33 @@ class DownloadTask:
             speed = _ANSI_RE.sub("", d.get("_speed_str", "")).strip()
             eta = _ANSI_RE.sub("", d.get("_eta_str", "")).strip()
 
-            now = time.monotonic()
-            if now - self._last_db_write >= 2.0:
-                db.update_progress(self.download_id, downloaded, progress, speed, eta)
-                self._last_db_write = now
-
-            self.manager.broadcast({
-                "type": "progress",
-                "id": self.download_id,
+            state = {
                 "downloaded_bytes": downloaded,
                 "progress": round(progress, 1),
                 "speed": speed,
                 "eta": eta,
-                "status": "downloading",
+                "status": Status.DOWNLOADING,
+            }
+            self.manager.update_runtime_state(self.download_id, state)
+            self.manager.broadcast({
+                "type": "progress",
+                "id": self.download_id,
+                **state,
             })
 
         elif d["status"] == "finished":
             file_path = d.get("filename", self.output_path)
-            db.update_progress(self.download_id, d.get("downloaded_bytes", 0), 100, "", "")
             db.update_file_path(self.download_id, file_path)
 
     def postprocessor_hook(self, d):
         if d["status"] == "started" and d.get("postprocessor") == "Merger":
             db.update_status(self.download_id, Status.MERGING)
+            self.manager.update_runtime_state(self.download_id, {
+                "status": Status.MERGING,
+                "progress": 100,
+                "speed": "",
+                "eta": "",
+            })
             self.manager.broadcast({
                 "type": "status",
                 "id": self.download_id,
@@ -90,6 +96,13 @@ class DownloadTask:
 
     def _run(self):
         db.update_status(self.download_id, Status.DOWNLOADING)
+        self.manager.update_runtime_state(self.download_id, {
+            "status": Status.DOWNLOADING,
+            "progress": 0,
+            "speed": "",
+            "eta": "",
+            "downloaded_bytes": 0,
+        })
         self.manager.broadcast({
             "type": "status",
             "id": self.download_id,
@@ -120,20 +133,23 @@ class DownloadTask:
                 final_path = mp4_path
 
             thumbnail_path = get_or_create_thumbnail(
-                video_url=self.url,
-                video_path=final_path
+                thumbnail_url=self.thumbnail_url,
+                video_path=final_path,
             )
             db.update_status(self.download_id, Status.COMPLETED)
-            db.update_file_path_and_thumbnail_path(self.download_id, final_path, thumbnail_path)
-            db.update_progress(self.download_id, 0, 100, "", "")
+            db.update_file_path_and_thumbnail(self.download_id, final_path, thumbnail_path)
+            self.manager.clear_runtime_state(self.download_id)
             self.manager.broadcast({
                 "type": "status",
                 "id": self.download_id,
                 "status": Status.COMPLETED,
                 "progress": 100,
+                "file_path": final_path,
+                "thumbnail": thumbnail_path,
             })
         except yt_dlp.utils.DownloadCancelled:
             db.update_status(self.download_id, Status.PAUSED)
+            self.manager.clear_runtime_state(self.download_id)
             self.manager.broadcast({
                 "type": "status",
                 "id": self.download_id,
@@ -141,6 +157,7 @@ class DownloadTask:
             })
         except Exception as e:
             db.update_status(self.download_id, Status.ERROR, str(e))
+            self.manager.clear_runtime_state(self.download_id)
             self.manager.broadcast({
                 "type": "status",
                 "id": self.download_id,
@@ -158,11 +175,50 @@ class DownloadManager:
     def __init__(self):
         self._tasks: dict[int, DownloadTask] = {}
         self._lock = threading.Lock()
+        self._runtime_state: dict[int, dict] = {}
+        self._state_lock = threading.Lock()
+
         self._subscribers: list[queue.Queue] = []
         self._sub_lock = threading.Lock()
+
+        # Event-driven queue: in-memory tracking instead of DB polling
+        self._queued_ids: deque[int] = deque()
+        self._queued_active_ids: set[int] = set()
         self._queue_event = threading.Event()
         self._queue_worker = threading.Thread(target=self._run_queue_worker, daemon=True)
         self._queue_worker.start()
+
+    # ── Runtime state (replaces DB progress writes) ───────────────────────
+
+    def update_runtime_state(self, download_id, state: dict):
+        with self._state_lock:
+            self._runtime_state[download_id] = state
+
+    def get_runtime_state(self, download_id):
+        with self._state_lock:
+            return self._runtime_state.get(download_id)
+
+    def clear_runtime_state(self, download_id):
+        with self._state_lock:
+            self._runtime_state.pop(download_id, None)
+
+    def get_downloads_with_runtime(self):
+        """Return all DB records enriched with in-memory runtime state."""
+        downloads = db.get_all_downloads()
+        with self._state_lock:
+            for dl in downloads:
+                runtime = self._runtime_state.get(dl["id"])
+                if runtime:
+                    dl.update(runtime)
+                else:
+                    dl.setdefault("downloaded_bytes", 0)
+                    dl.setdefault("progress",
+                                  100.0 if dl["status"] == Status.COMPLETED else 0.0)
+                    dl.setdefault("speed", "")
+                    dl.setdefault("eta", "")
+        return downloads
+
+    # ── SSE pub/sub ───────────────────────────────────────────────────────
 
     def subscribe(self):
         q = queue.Queue()
@@ -186,23 +242,48 @@ class DownloadManager:
             for q in dead:
                 self._subscribers.remove(q)
 
+    # ── Event-driven queue ────────────────────────────────────────────────
+
+    def load_queue_from_db(self):
+        """One-time recovery: load QUEUED items from DB into memory.
+        Call after db.init_db() and db.mark_interrupted_as_paused()."""
+        ids = db.get_queued_ids()
+        with self._lock:
+            self._queued_ids.extend(ids)
+        if ids:
+            self._notify_queue()
+
     def _run_queue_worker(self):
         while True:
-            self._queue_event.wait(timeout=3)
+            self._queue_event.wait()
             self._queue_event.clear()
-            if db.count_active_queued() > 0:
+
+            with self._lock:
+                if self._queued_active_ids:
+                    continue
+                if not self._queued_ids:
+                    continue
+                download_id = self._queued_ids.popleft()
+
+            dl = db.get_download(download_id)
+            if not dl or dl["status"] != Status.QUEUED:
+                self._notify_queue()
                 continue
-            next_dl = db.get_oldest_queued()
-            if not next_dl:
-                continue
+
+            with self._lock:
+                self._queued_active_ids.add(download_id)
+
             self._start_task(
-                next_dl["id"], next_dl["url"], next_dl["format_id"],
-                next_dl["file_path"],
-                next_dl["concurrent_fragments"] or 1,
+                download_id, dl["url"], dl["format_id"],
+                dl["file_path"],
+                dl["concurrent_fragments"] or 1,
+                thumbnail_url=dl["thumbnail"],
             )
 
     def _notify_queue(self):
         self._queue_event.set()
+
+    # ── Download record & task lifecycle ──────────────────────────────────
 
     def _create_download_record(self, url, video_info, format_id, quality_label,
                                 concurrent_fragments=1, status=Status.PENDING,
@@ -234,9 +315,9 @@ class DownloadManager:
         return download_id
 
     def _start_task(self, download_id, url, format_id, output_path,
-                    concurrent_fragments=1):
+                    concurrent_fragments=1, thumbnail_url=None):
         task = DownloadTask(download_id, url, format_id, output_path, self,
-                            concurrent_fragments)
+                            concurrent_fragments, thumbnail_url)
         with self._lock:
             self._tasks[download_id] = task
         task.start()
@@ -245,38 +326,6 @@ class DownloadManager:
         ydl_opts = {"quiet": True, "no_warnings": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-
-        formats = []
-        seen = set()
-        for f in info.get("formats", []):
-            height = f.get("height")
-            vcodec = f.get("vcodec", "none")
-            acodec = f.get("acodec", "none")
-
-            if vcodec == "none" and acodec != "none":
-                label = f"Audio ({f.get('abr', '?')}kbps)"
-                key = f"audio-{f.get('format_id')}"
-            elif height:
-                label = f"{height}p"
-                if f.get("fps"):
-                    label += f" {f['fps']}fps"
-                key = f"{height}p"
-            else:
-                continue
-
-            if key in seen:
-                continue
-            seen.add(key)
-
-            formats.append({
-                "format_id": f["format_id"],
-                "label": label,
-                "height": height or 0,
-                "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
-                "ext": f.get("ext", "mp4"),
-                "vcodec": vcodec,
-                "acodec": acodec,
-            })
 
         best_formats = self._build_quality_options(info)
 
@@ -292,13 +341,17 @@ class DownloadManager:
         """Build user-friendly quality options using yt-dlp format selection."""
         options = []
         qualities = [
+            ("4320", "8K (4320p)"),
             ("2160", "4K (2160p)"),
             ("1440", "1440p"),
             ("1080", "1080p"),
             ("720", "720p"),
             ("480", "480p"),
             ("360", "360p"),
+            ("240", "240p"),
+            ("144", "144p"),
         ]
+
 
         available_heights = set()
         for f in info.get("formats", []):
@@ -330,6 +383,8 @@ class DownloadManager:
 
         return options
 
+    # ── Public download operations ────────────────────────────────────────
+
     def start_download(self, url, video_info, format_id, quality_label,
                        concurrent_fragments=1):
         download_id = self._create_download_record(
@@ -337,7 +392,7 @@ class DownloadManager:
         )
         dl = db.get_download(download_id)
         self._start_task(download_id, url, format_id, dl["file_path"],
-                         concurrent_fragments)
+                         concurrent_fragments, thumbnail_url=dl["thumbnail"])
         self.broadcast({"type": "new", "download": dl})
         return download_id
 
@@ -349,6 +404,9 @@ class DownloadManager:
         )
         dl = db.get_download(download_id)
         self.broadcast({"type": "new", "download": dl})
+
+        with self._lock:
+            self._queued_ids.append(download_id)
         self._notify_queue()
         return download_id
 
@@ -362,6 +420,11 @@ class DownloadManager:
         dl = db.get_download(download_id)
         if dl and dl["status"] == Status.QUEUED:
             db.update_status(download_id, Status.PAUSED)
+            with self._lock:
+                try:
+                    self._queued_ids.remove(download_id)
+                except ValueError:
+                    pass
             self.broadcast({"type": "status", "id": download_id, "status": Status.PAUSED})
             return True
         return False
@@ -371,10 +434,10 @@ class DownloadManager:
         if not dl or dl["status"] not in (Status.PAUSED, Status.ERROR):
             return False
 
-        db.update_is_queued(download_id, queued)
-
         if queued:
             db.update_status(download_id, Status.QUEUED)
+            with self._lock:
+                self._queued_ids.append(download_id)
             self.broadcast({
                 "type": "status",
                 "id": download_id,
@@ -385,6 +448,7 @@ class DownloadManager:
             self._start_task(
                 download_id, dl["url"], dl["format_id"], dl["file_path"],
                 dl["concurrent_fragments"] or 1,
+                thumbnail_url=dl["thumbnail"],
             )
         return True
 
@@ -395,6 +459,13 @@ class DownloadManager:
                 task.pause()
                 time.sleep(0.5)
                 self._tasks.pop(download_id, None)
+            try:
+                self._queued_ids.remove(download_id)
+            except ValueError:
+                pass
+            self._queued_active_ids.discard(download_id)
+
+        self.clear_runtime_state(download_id)
 
         dl = db.get_download(download_id)
         if dl and dl["file_path"]:
@@ -429,4 +500,5 @@ class DownloadManager:
     def remove_task(self, download_id):
         with self._lock:
             self._tasks.pop(download_id, None)
+            self._queued_active_ids.discard(download_id)
         self._notify_queue()
