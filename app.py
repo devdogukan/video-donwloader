@@ -44,7 +44,7 @@ def add_local_download():
     except OSError as e:
         return jsonify({"error": str(e)}), 500
 
-    result = svc.add_local_download(dest)
+    result = svc.add_local_download(dest, title=f.filename)
     return jsonify(result)
 
 

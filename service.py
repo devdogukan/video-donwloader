@@ -29,15 +29,17 @@ class VideoService:
 
     # ── Local Upload ──────────────────────────────────────────────────────
 
-    def add_local_download(self, file_path: str) -> dict:
+    def add_local_download(self, file_path: str, title: str | None = None) -> dict:
         path = os.path.abspath(file_path)
         try:
             size = os.path.getsize(path)
         except OSError:
             size = None
 
+        display_title = title or os.path.basename(path)
+
         download_id = db.create_download(
-            video_id=None, url=None, title=os.path.basename(path),
+            video_id=None, url=None, title=display_title,
             thumbnail=get_or_create_thumbnail(video_path=path),
             duration=None, format_id=None, quality_label=None,
             filesize=size, file_path=path, status=Status.COMPLETED,

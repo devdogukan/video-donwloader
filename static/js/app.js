@@ -100,14 +100,14 @@ localUploadCard.addEventListener("click", () => {
 });
 
 localVideoInput.addEventListener("change", () => {
-    const file = localVideoInput.files && localVideoInput.files[0];
-    if (file) {
-        uploadLocalVideo(file);
+    const files = localVideoInput.files;
+    if (files && files.length > 0) {
+        uploadLocalVideos([...files]);
     }
     localVideoInput.value = "";
 });
 
-async function uploadLocalVideo(file) {
+async function uploadLocalVideos(files) {
     const card = localUploadCard;
     const loader = card.querySelector(".upload-card-loader");
     const titleEl = card.querySelector(".upload-card-title");
@@ -118,28 +118,39 @@ async function uploadLocalVideo(file) {
 
     card.disabled = true;
     loader.classList.remove("hidden");
-    titleEl.textContent = "Uploading…";
-    hintEl.textContent = file.name || "";
     errorEl.classList.add("hidden");
 
-    const form = new FormData();
-    form.append("file", file, file.name);
+    const total = files.length;
+    const errors = [];
 
-    try {
-        const res = await fetch("/api/downloads/local", {
-            method: "POST",
-            body: form,
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
-    } catch (err) {
-        errorEl.textContent = err.message;
+    for (let i = 0; i < total; i++) {
+        const file = files[i];
+        titleEl.textContent = total > 1 ? `Uploading ${i + 1}/${total}…` : "Uploading…";
+        hintEl.textContent = file.name || "";
+
+        const form = new FormData();
+        form.append("file", file, file.name);
+
+        try {
+            const res = await fetch("/api/downloads/local", {
+                method: "POST",
+                body: form,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Upload failed");
+        } catch (err) {
+            errors.push(`${file.name}: ${err.message}`);
+        }
+    }
+
+    card.disabled = false;
+    loader.classList.add("hidden");
+    titleEl.textContent = prevTitle;
+    hintEl.textContent = prevHint;
+
+    if (errors.length > 0) {
+        errorEl.textContent = errors.join(" | ");
         errorEl.classList.remove("hidden");
-    } finally {
-        card.disabled = false;
-        loader.classList.add("hidden");
-        titleEl.textContent = prevTitle;
-        hintEl.textContent = prevHint;
     }
 }
 
