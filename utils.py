@@ -3,9 +3,7 @@ import subprocess
 import requests
 import uuid
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-THUMB_DIR = os.path.join(BASE_DIR, "downloads", "thumbnails")
-os.makedirs(THUMB_DIR, exist_ok=True)
+from config import THUMB_DIR
 
 
 def generate_thumbnail_with_ffmpeg(video_path: str, output_path: str) -> bool:

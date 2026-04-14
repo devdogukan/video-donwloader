@@ -1,20 +1,12 @@
 import sqlite3
 import os
 import threading
-from enum import StrEnum
 from typing import Any
 
+from models import Status
+from config import BASE_DIR
 
-class Status(StrEnum):
-    PENDING = "pending"
-    QUEUED = "queued"
-    DOWNLOADING = "downloading"
-    MERGING = "merging"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    ERROR = "error"
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.db")
+DB_PATH = os.path.join(BASE_DIR, "app.db")
 
 _local = threading.local()
 

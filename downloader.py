@@ -10,13 +10,11 @@ from collections import deque
 import yt_dlp
 
 import database as db
-from database import Status
-from utils import get_or_create_thumbnail, THUMB_DIR
+from models import Status
+from config import DOWNLOADS_DIR, THUMB_DIR
+from utils import get_or_create_thumbnail
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
-DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 
 def _is_path_under_dir(path, parent_dir):
