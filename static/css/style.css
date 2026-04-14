@@ -1025,119 +1025,29 @@ header h1 {
     cursor: not-allowed;
 }
 
-/* ── Playlist Folder Cards ───────────────────────────────────────── */
+/* ── Playlist Card (in grid) ─────────────────────────────────────── */
 
-.playlist-folder {
-    grid-column: 1 / -1;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    transition: border-color 0.2s;
-}
-
-.playlist-folder:hover {
-    border-color: #444;
-}
-
-.playlist-folder-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
+.playlist-card {
     cursor: pointer;
-    transition: background 0.15s;
 }
 
-.playlist-folder-header:hover {
-    background: var(--bg-tertiary);
-}
-
-.playlist-folder-thumb {
-    position: relative;
-    width: 80px;
-    height: 45px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: var(--bg-tertiary);
-    flex-shrink: 0;
-}
-
-.playlist-folder-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.playlist-folder-icon {
+.playlist-card-badge {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px !important;
-    color: var(--text-secondary);
-    opacity: 0.4;
-}
-
-.playlist-folder-thumb img + .playlist-folder-icon {
-    display: none;
-}
-
-.playlist-folder-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.playlist-folder-title {
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.playlist-folder-meta {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.playlist-folder-actions {
+    bottom: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 4px 10px;
     display: flex;
     align-items: center;
     gap: 4px;
-    flex-shrink: 0;
+    border-top-left-radius: var(--radius-sm);
 }
 
-.playlist-folder-actions button {
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 6px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.playlist-folder-actions button .material-symbols-rounded {
-    font-size: 20px !important;
-}
-
-.playlist-folder-actions button.danger:hover {
-    background: rgba(255, 68, 68, 0.1);
-    color: var(--accent);
-    border-color: var(--accent);
-}
-
-.playlist-folder-chevron {
-    font-size: 24px !important;
-    color: var(--text-secondary);
+.playlist-card-badge .material-symbols-rounded {
+    font-size: 16px !important;
 }
 
 /* ── Playlist Detail Page ────────────────────────────────────────── */

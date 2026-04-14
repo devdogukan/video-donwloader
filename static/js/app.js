@@ -565,6 +565,65 @@ function buildPlaylistPauseResumeBtn(plId, group) {
     return "";
 }
 
+function buildPlaylistCard(plId, group) {
+    const pl = playlists[plId];
+    const title = pl ? pl.title : "Playlist";
+    const thumb = pl ? pl.thumbnail : null;
+
+    const completed = group.filter((d) => d.status === "completed").length;
+    const total = group.length;
+    const aggregateProgress = total > 0
+        ? group.reduce((sum, d) => sum + (d.progress || 0), 0) / total
+        : 0;
+    const allDone = completed === total;
+    const progressClass = allDone ? "completed" : "";
+
+    let actionButtons = buildPlaylistPauseResumeBtn(plId, group);
+    actionButtons += `<button onclick="event.stopPropagation(); openPlaylistPage('${plId}')" title="Open playlist">
+        <span class="material-symbols-rounded">open_in_new</span> Open
+    </button>`;
+    actionButtons += `<button class="danger" onclick="event.stopPropagation(); deletePlaylist(${plId})" title="Delete playlist">
+        <span class="material-symbols-rounded">delete</span> Delete
+    </button>`;
+
+    return `
+        <div class="download-item playlist-card" data-playlist-id="${plId}" onclick="openPlaylistPage('${plId}')">
+            <div class="dl-thumb-wrap">
+                ${thumb ? `<img src="/api/thumbnail/${thumb}" alt="" onerror="this.style.display='none'">` : ""}
+                <div class="playlist-card-badge">
+                    <span class="material-symbols-rounded">playlist_play</span>
+                    <span>${total} videos</span>
+                </div>
+            </div>
+            <div class="dl-body">
+                <div class="dl-header">
+                    <span class="dl-title">${escapeHtml(title)}</span>
+                    <span class="status-badge ${allDone ? "status-completed" : "status-downloading"}">${allDone ? "Completed" : `${completed}/${total}`}</span>
+                </div>
+                <div class="dl-meta">
+                    <span>Playlist</span>
+                    <span>${completed} of ${total} completed</span>
+                </div>
+                ${!allDone ? `
+                <div class="progress-wrapper">
+                    <div class="progress-bar">
+                        <div class="progress-fill ${progressClass}" style="width: ${aggregateProgress}%"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span>${aggregateProgress.toFixed(1)}%</span>
+                        <span></span>
+                    </div>
+                </div>
+                ` : ""}
+            </div>
+            <hr class="dl-actions-divider">
+            <div class="dl-actions">
+                ${actionButtons}
+            </div>
+        </div>
+    `;
+}
+
 function renderDownloads() {
     const list = $("#downloadsList");
     const keys = Object.keys(downloads);
@@ -597,43 +656,7 @@ function renderDownloads() {
     });
 
     playlistIds.forEach((plId) => {
-        const group = playlistGroups[plId];
-        const pl = playlists[plId];
-        const title = pl ? pl.title : "Playlist";
-        const thumb = pl ? pl.thumbnail : null;
-
-        const completed = group.filter((d) => d.status === "completed").length;
-        const total = group.length;
-        const aggregateProgress = total > 0
-            ? group.reduce((sum, d) => sum + (d.progress || 0), 0) / total
-            : 0;
-        const allDone = completed === total;
-        const progressClass = allDone ? "completed" : "";
-
-        html += `
-            <div class="playlist-folder" data-playlist-id="${plId}">
-                <div class="playlist-folder-header" onclick="openPlaylistPage('${plId}')">
-                    <div class="playlist-folder-thumb">
-                        ${thumb ? `<img src="/api/thumbnail/${thumb}" alt="" onerror="this.style.display='none'">` : ""}
-                        <span class="material-symbols-rounded playlist-folder-icon">folder</span>
-                    </div>
-                    <div class="playlist-folder-info">
-                        <span class="playlist-folder-title">${escapeHtml(title)}</span>
-                        <span class="playlist-folder-meta">${completed}/${total} completed</span>
-                        <div class="progress-bar" style="margin-top:4px">
-                            <div class="progress-fill ${progressClass}" style="width:${aggregateProgress}%"></div>
-                        </div>
-                    </div>
-                    <div class="playlist-folder-actions">
-                        ${buildPlaylistPauseResumeBtn(plId, group)}
-                        <button class="danger" onclick="event.stopPropagation(); deletePlaylist(${plId})" title="Delete playlist">
-                            <span class="material-symbols-rounded">delete</span>
-                        </button>
-                        <span class="material-symbols-rounded playlist-folder-chevron">chevron_right</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        html += buildPlaylistCard(plId, playlistGroups[plId]);
     });
 
     const sortedStandalone = standalone.sort(
