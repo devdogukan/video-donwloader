@@ -5,7 +5,7 @@ let evtSource = null;
 let deleteModalTargetId = null;
 let deletePlaylistTargetId = null;
 let currentPlaylistData = null;
-let expandedPlaylists = new Set();
+let activePlaylistPageId = null;
 
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
     navigator.userAgent
@@ -286,7 +286,9 @@ function handleModalEscape(e) {
 async function confirmDelete() {
     if (deletePlaylistTargetId) {
         const id = deletePlaylistTargetId;
+        const wasOnPlaylistPage = activePlaylistPageId === String(id);
         closeDeleteModal();
+        if (wasOnPlaylistPage) closePlaylistPage();
         await fetch(`/api/playlist/${id}`, { method: "DELETE" });
         return;
     }
@@ -307,7 +309,22 @@ async function openInPlayer(id) {
 }
 
 function openInBrowser(id) {
-    window.open(`/api/download/${id}/file`, "_blank");
+    const url = `/api/download/${id}/file`;
+    if (isMobile) {
+        window.location.href = url;
+    } else {
+        window.open(url, "_blank");
+    }
+}
+
+// ── Playlist Pause / Resume ──────────────────────────────────────────────────
+
+async function pausePlaylist(plId) {
+    await fetch(`/api/playlist/${plId}/pause`, { method: "POST" });
+}
+
+async function resumePlaylist(plId) {
+    await fetch(`/api/playlist/${plId}/resume`, { method: "POST" });
 }
 
 // ── Playlist Modal ──────────────────────────────────────────────────────────
@@ -528,6 +545,26 @@ function deletePlaylist(playlistId) {
 
 // ── Render Downloads List ───────────────────────────────────────────────────
 
+function buildPlaylistPauseResumeBtn(plId, group) {
+    const hasActive = group.some((d) =>
+        ["downloading", "queued", "merging"].includes(d.status)
+    );
+    const hasResumable = group.some((d) =>
+        ["paused", "error"].includes(d.status)
+    );
+    if (hasActive) {
+        return `<button onclick="event.stopPropagation(); pausePlaylist(${plId})" title="Pause all">
+            <span class="material-symbols-rounded">pause</span>
+        </button>`;
+    }
+    if (hasResumable) {
+        return `<button onclick="event.stopPropagation(); resumePlaylist(${plId})" title="Resume all">
+            <span class="material-symbols-rounded">play_arrow</span>
+        </button>`;
+    }
+    return "";
+}
+
 function renderDownloads() {
     const list = $("#downloadsList");
     const keys = Object.keys(downloads);
@@ -564,7 +601,6 @@ function renderDownloads() {
         const pl = playlists[plId];
         const title = pl ? pl.title : "Playlist";
         const thumb = pl ? pl.thumbnail : null;
-        const isExpanded = expandedPlaylists.has(plId);
 
         const completed = group.filter((d) => d.status === "completed").length;
         const total = group.length;
@@ -574,13 +610,9 @@ function renderDownloads() {
         const allDone = completed === total;
         const progressClass = allDone ? "completed" : "";
 
-        const sortedGroup = [...group].sort(
-            (a, b) => new Date(a.created_at) - new Date(b.created_at)
-        );
-
         html += `
-            <div class="playlist-folder ${isExpanded ? "expanded" : "collapsed"}" data-playlist-id="${plId}">
-                <div class="playlist-folder-header" onclick="togglePlaylistFolder('${plId}')">
+            <div class="playlist-folder" data-playlist-id="${plId}">
+                <div class="playlist-folder-header" onclick="openPlaylistPage('${plId}')">
                     <div class="playlist-folder-thumb">
                         ${thumb ? `<img src="/api/thumbnail/${thumb}" alt="" onerror="this.style.display='none'">` : ""}
                         <span class="material-symbols-rounded playlist-folder-icon">folder</span>
@@ -593,19 +625,13 @@ function renderDownloads() {
                         </div>
                     </div>
                     <div class="playlist-folder-actions">
+                        ${buildPlaylistPauseResumeBtn(plId, group)}
                         <button class="danger" onclick="event.stopPropagation(); deletePlaylist(${plId})" title="Delete playlist">
                             <span class="material-symbols-rounded">delete</span>
                         </button>
-                        <span class="material-symbols-rounded playlist-folder-chevron">
-                            ${isExpanded ? "expand_less" : "expand_more"}
-                        </span>
+                        <span class="material-symbols-rounded playlist-folder-chevron">chevron_right</span>
                     </div>
                 </div>
-                ${isExpanded ? `
-                    <div class="playlist-folder-body">
-                        ${sortedGroup.map((dl) => buildDownloadItem(dl)).join("")}
-                    </div>
-                ` : ""}
             </div>
         `;
     });
@@ -622,14 +648,78 @@ function renderDownloads() {
     list.innerHTML = html;
 }
 
-function togglePlaylistFolder(plId) {
-    if (expandedPlaylists.has(plId)) {
-        expandedPlaylists.delete(plId);
-    } else {
-        expandedPlaylists.add(plId);
-    }
-    renderDownloads();
+function openPlaylistPage(plId) {
+    activePlaylistPageId = String(plId);
+    $(".container").classList.add("hidden");
+    $("#playlistPage").classList.remove("hidden");
+    renderPlaylistPage();
+    history.pushState({ playlistPage: plId }, "");
+    window.scrollTo(0, 0);
 }
+
+function closePlaylistPage() {
+    activePlaylistPageId = null;
+    $("#playlistPage").classList.add("hidden");
+    $(".container").classList.remove("hidden");
+}
+
+function renderPlaylistPage() {
+    const plId = activePlaylistPageId;
+    if (!plId) return;
+
+    const pl = playlists[plId];
+    const group = Object.values(downloads).filter(
+        (d) => String(d.playlist_id) === String(plId)
+    );
+    const sorted = [...group].sort(
+        (a, b) => new Date(a.created_at) - new Date(b.created_at)
+    );
+
+    const title = pl ? pl.title : "Playlist";
+    const thumb = pl ? pl.thumbnail : "";
+    const completed = group.filter((d) => d.status === "completed").length;
+    const total = group.length;
+    const aggregateProgress = total > 0
+        ? group.reduce((sum, d) => sum + (d.progress || 0), 0) / total
+        : 0;
+    const allDone = completed === total;
+
+    const thumbImg = $("#playlistPageThumb");
+    if (thumb) {
+        thumbImg.src = `/api/thumbnail/${thumb}`;
+        thumbImg.style.display = "";
+    } else {
+        thumbImg.src = "";
+        thumbImg.style.display = "none";
+    }
+
+    $("#playlistPageTitle").textContent = title;
+    $("#playlistPageMeta").textContent = `${completed}/${total} completed`;
+
+    const progressEl = $("#playlistPageProgress");
+    progressEl.style.width = `${aggregateProgress}%`;
+    progressEl.className = `progress-fill ${allDone ? "completed" : ""}`;
+
+    const actionsEl = $("#playlistPageActions");
+    let actionsHtml = buildPlaylistPauseResumeBtn(plId, group);
+    actionsHtml += `<button class="danger" onclick="deletePlaylist(${plId})" title="Delete playlist">
+        <span class="material-symbols-rounded">delete</span> Delete
+    </button>`;
+    actionsEl.innerHTML = actionsHtml;
+
+    const listEl = $("#playlistPageList");
+    if (sorted.length === 0) {
+        listEl.innerHTML = '<p class="empty-state">No videos in this playlist.</p>';
+    } else {
+        listEl.innerHTML = sorted.map((dl) => buildDownloadItem(dl)).join("");
+    }
+}
+
+window.addEventListener("popstate", (e) => {
+    if (activePlaylistPageId) {
+        closePlaylistPage();
+    }
+});
 
 function buildDownloadItem(dl) {
     const progress = dl.progress || 0;
@@ -747,6 +837,9 @@ function handleSSEEvent(event) {
                 downloads[event.id].eta = event.eta;
                 downloads[event.id].status = event.status;
                 updateDownloadItemInPlace(event.id);
+                if (activePlaylistPageId && String(downloads[event.id].playlist_id) === activePlaylistPageId) {
+                    updatePlaylistPageInPlace(event.id);
+                }
             }
             break;
 
@@ -763,6 +856,7 @@ function handleSSEEvent(event) {
                     downloads[event.id].is_queued = event.is_queued;
                 }
                 renderDownloads();
+                if (activePlaylistPageId) renderPlaylistPage();
             }
             break;
 
@@ -770,25 +864,63 @@ function handleSSEEvent(event) {
             if (event.download) {
                 downloads[event.download.id] = event.download;
                 renderDownloads();
+                if (activePlaylistPageId && String(event.download.playlist_id) === activePlaylistPageId) {
+                    renderPlaylistPage();
+                }
             }
             break;
 
         case "deleted":
             delete downloads[event.id];
             renderDownloads();
+            if (activePlaylistPageId) renderPlaylistPage();
             break;
 
         case "playlist_deleted":
+            if (activePlaylistPageId === String(event.playlist_id)) {
+                closePlaylistPage();
+            }
             delete playlists[event.playlist_id];
             Object.keys(downloads).forEach((k) => {
                 if (downloads[k].playlist_id === event.playlist_id) {
                     delete downloads[k];
                 }
             });
-            expandedPlaylists.delete(String(event.playlist_id));
             renderDownloads();
             break;
     }
+}
+
+function updatePlaylistPageInPlace(id) {
+    const dl = downloads[id];
+    if (!dl || !activePlaylistPageId) return;
+
+    const pageList = $("#playlistPageList");
+    if (!pageList) return;
+    const el = pageList.querySelector(`.download-item[data-id="${id}"]`);
+    if (!el) return;
+
+    const fill = el.querySelector(".progress-fill");
+    if (fill) fill.style.width = `${dl.progress || 0}%`;
+
+    const stats = el.querySelector(".progress-stats");
+    if (stats) {
+        const statusLine = `${dl.speed || ""} ${dl.eta ? "• " + dl.eta : ""}`;
+        stats.innerHTML = `<span>${(dl.progress || 0).toFixed(1)}%</span><span>${statusLine}</span>`;
+    }
+
+    const group = Object.values(downloads).filter(
+        (d) => String(d.playlist_id) === activePlaylistPageId
+    );
+    const completed = group.filter((d) => d.status === "completed").length;
+    const total = group.length;
+    const aggregateProgress = total > 0
+        ? group.reduce((sum, d) => sum + (d.progress || 0), 0) / total
+        : 0;
+    $("#playlistPageMeta").textContent = `${completed}/${total} completed`;
+    const progressEl = $("#playlistPageProgress");
+    progressEl.style.width = `${aggregateProgress}%`;
+    progressEl.className = `progress-fill ${completed === total ? "completed" : ""}`;
 }
 
 function updateDownloadItemInPlace(id) {
@@ -836,4 +968,7 @@ async function refreshDownloads() {
 // ── Init ────────────────────────────────────────────────────────────────────
 
 createDeleteModal();
+$("#playlistPageBack").addEventListener("click", () => {
+    history.back();
+});
 connectSSE();

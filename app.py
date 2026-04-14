@@ -183,6 +183,32 @@ def playlist_delete(playlist_id):
     return jsonify({"status": "deleted"})
 
 
+@app.post("/api/playlist/<int:playlist_id>/pause")
+def playlist_pause(playlist_id):
+    pl = db.get_playlist(playlist_id)
+    if not pl:
+        return jsonify({"error": "Playlist not found"}), 404
+    count = 0
+    for dl in db.get_downloads_by_playlist(playlist_id):
+        if dl["status"] in (Status.DOWNLOADING, Status.QUEUED):
+            if manager.pause_download(dl["id"]):
+                count += 1
+    return jsonify({"status": "paused", "count": count})
+
+
+@app.post("/api/playlist/<int:playlist_id>/resume")
+def playlist_resume(playlist_id):
+    pl = db.get_playlist(playlist_id)
+    if not pl:
+        return jsonify({"error": "Playlist not found"}), 404
+    count = 0
+    for dl in db.get_downloads_by_playlist(playlist_id):
+        if dl["status"] in (Status.PAUSED, Status.ERROR):
+            if manager.resume_download(dl["id"], queued=True):
+                count += 1
+    return jsonify({"status": "resumed", "count": count})
+
+
 @app.post("/api/download/<int:download_id>/pause")
 def download_pause(download_id):
     ok = manager.pause_download(download_id)

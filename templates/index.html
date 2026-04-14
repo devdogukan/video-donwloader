@@ -106,6 +106,27 @@
         </section>
     </div>
 
+    <div id="playlistPage" class="playlist-page hidden">
+        <div class="playlist-page-header">
+            <button id="playlistPageBack" class="playlist-page-back" title="Back">
+                <span class="material-symbols-rounded">arrow_back</span>
+            </button>
+            <div class="playlist-page-thumb">
+                <img id="playlistPageThumb" src="" alt="">
+                <span class="material-symbols-rounded playlist-page-thumb-icon">queue_music</span>
+            </div>
+            <div class="playlist-page-info">
+                <h2 id="playlistPageTitle"></h2>
+                <span id="playlistPageMeta" class="playlist-page-meta"></span>
+                <div class="progress-bar" style="margin-top:6px">
+                    <div id="playlistPageProgress" class="progress-fill" style="width:0%"></div>
+                </div>
+            </div>
+            <div id="playlistPageActions" class="playlist-page-actions"></div>
+        </div>
+        <div id="playlistPageList" class="playlist-page-list"></div>
+    </div>
+
     <div id="playlistModal" class="modal-overlay hidden">
         <div class="modal playlist-modal">
             <div class="playlist-modal-header">
