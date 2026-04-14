@@ -90,6 +90,20 @@ class VideoService:
         self._manager.broadcast({"type": "playlist_created", "playlist": pl})
         return pl
 
+    def rename_playlist(self, playlist_id: int, title: str) -> dict:
+        title = (title or "").strip()
+        if not title:
+            raise ValidationError("Playlist title is required")
+        pl = db.get_playlist(playlist_id)
+        if not pl:
+            raise NotFoundError("Playlist not found")
+        db.update_playlist_title(playlist_id, title)
+        updated_pl = db.get_playlist(playlist_id)
+        self._manager.broadcast({
+            "type": "playlist_updated", "playlist": updated_pl,
+        })
+        return updated_pl
+
     def add_to_playlist(self, playlist_id: int, download_id: int) -> None:
         pl = db.get_playlist(playlist_id)
         if not pl:

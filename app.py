@@ -80,6 +80,19 @@ def playlist_create():
         return jsonify({"error": str(e)}), 400
 
 
+@app.post("/api/playlist/<int:playlist_id>/rename")
+def playlist_rename(playlist_id):
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    try:
+        pl = svc.rename_playlist(playlist_id, title)
+        return jsonify(pl)
+    except ValidationError as e:
+        return jsonify({"error": str(e)}), 400
+    except NotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+
 @app.post("/api/playlist/<int:playlist_id>/add")
 def playlist_add_download(playlist_id):
     data = request.get_json(silent=True) or {}

@@ -226,6 +226,15 @@ def update_download_playlist(download_id, playlist_id):
     conn.commit()
 
 
+def update_playlist_title(row_id, title):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE playlists SET title = ? WHERE id = ?",
+        (title, row_id),
+    )
+    conn.commit()
+
+
 def update_playlist_thumbnail(row_id, thumbnail):
     conn = get_connection()
     conn.execute(

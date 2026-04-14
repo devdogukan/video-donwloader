@@ -770,6 +770,67 @@ $("#playlistThumbInput").addEventListener("change", () => {
     $("#playlistThumbInput").value = "";
 });
 
+// ── Playlist Rename (inline) ─────────────────────────────────────────────────
+
+function startPlaylistRename() {
+    const plId = activePlaylistPageId;
+    if (!plId) return;
+    const pl = playlists[plId];
+    const titleEl = $("#playlistPageTitle");
+    const editBtn = $("#playlistPageEditBtn");
+    const currentTitle = pl ? pl.title : "";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "playlist-page-title-input";
+    input.value = currentTitle;
+
+    titleEl.replaceWith(input);
+    editBtn.classList.add("hidden");
+    input.focus();
+    input.select();
+
+    async function commitRename() {
+        const newTitle = input.value.trim();
+        const h2 = document.createElement("h2");
+        h2.id = "playlistPageTitle";
+        h2.className = "playlist-page-title-editable";
+        h2.title = "Click to rename";
+        h2.textContent = newTitle || currentTitle;
+        input.replaceWith(h2);
+        editBtn.classList.remove("hidden");
+
+        h2.addEventListener("click", startPlaylistRename);
+
+        if (newTitle && newTitle !== currentTitle) {
+            try {
+                const res = await fetch(`/api/playlist/${plId}/rename`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: newTitle }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Rename failed");
+            } catch (err) {
+                alert("Could not rename: " + err.message);
+                h2.textContent = currentTitle;
+            }
+        }
+    }
+
+    input.addEventListener("blur", commitRename);
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") input.blur();
+        if (e.key === "Escape") {
+            input.value = currentTitle;
+            input.blur();
+        }
+    });
+}
+
+$("#playlistPageTitle").addEventListener("click", startPlaylistRename);
+$("#playlistPageEditBtn").addEventListener("click", startPlaylistRename);
+
 // ── Render Downloads List ───────────────────────────────────────────────────
 
 function buildPlaylistPauseResumeBtn(plId, group) {

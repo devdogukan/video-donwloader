@@ -126,7 +126,12 @@
                 </div>
             </div>
             <div class="playlist-page-info">
-                <h2 id="playlistPageTitle"></h2>
+                <div class="playlist-page-title-row">
+                    <h2 id="playlistPageTitle" class="playlist-page-title-editable" title="Click to rename"></h2>
+                    <button id="playlistPageEditBtn" class="playlist-page-edit-btn" title="Rename">
+                        <span class="material-symbols-rounded">edit</span>
+                    </button>
+                </div>
                 <span id="playlistPageMeta" class="playlist-page-meta"></span>
                 <div class="progress-bar" style="margin-top:6px">
                     <div id="playlistPageProgress" class="progress-fill" style="width:0%"></div>
